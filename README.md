@@ -1,8 +1,12 @@
 # CNG 334 Complete Group Coursework
 
 Github Link: https://github.com/Khaled-Eldowa/OS_Coursework
-Master branch: the complete coursework, 
+
+Master branch: the complete coursework
+
 No_Sync branch: the coursework without synchornization
+
+By Khaled Eldowa and Eugene Owilla.
 
 Program Description:
 
