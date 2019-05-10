@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReadWriteLock;
 
 public class SearchHandler implements Runnable{
 
@@ -21,20 +22,23 @@ public class SearchHandler implements Runnable{
 	private int requestNumber; //just for reference
 	private String word;
 	private ArrayList<File> files;
+	private Map<File, ReadWriteLock> locksMap;
 	private int totalWordsFound;
 	private Map<File, Integer> wordsFoundInEachFile;  //hash table that maps each file to the number of matches found in it
 	
-	public SearchHandler(int maxThreads, Socket client, ArrayList<File> files, int requestNumber) {
+	public SearchHandler(int maxThreads, Socket client, ArrayList<File> files, Map<File, ReadWriteLock> locksMap, int requestNumber) {
 		this.maxThreads = maxThreads;
 		this.client = client;
 		this.files = files;
+		this.locksMap = locksMap; //hash table matches each of the passed file to a pair of locks (read and write)
 		this.requestNumber = requestNumber;
 		this.totalWordsFound = 0;
 		this.wordsFoundInEachFile = new HashMap<File, Integer>();
 	}
 	
 	//to be called by the file handlers
-	public void reportFileResults(File file, int wordsFound) {
+	//has to be synchronized to avoid discrepancies if more than one thread attempt to call it at the same time
+	synchronized public void reportFileResults(File file, int wordsFound) {
 		wordsFoundInEachFile.put(file, wordsFound); //update the hashmap
 		totalWordsFound += wordsFound; //update the total count
 	}
@@ -61,7 +65,8 @@ public class SearchHandler implements Runnable{
 	        //if the pool capacity has been reached, a waiting thread will wait and be automatically executed once an executing thread finishes
 	        ExecutorService executor = Executors.newFixedThreadPool(maxThreads);
 	        for (File file : files) {
-				executor.execute(new FileHandler(word, file, this));
+	        	//pass the word, the files, the locks, and a reference to this search handle to a new file handler thread
+				executor.execute(new FileHandler(word, file, locksMap.get(file), this));
 			}
 	        
 	        //shutdown the executor once all threads are done executing
@@ -103,7 +108,7 @@ public class SearchHandler implements Runnable{
 		}
 	}
 	
-	//Only called by the RequestRejectionHandler which is called when a process is rejected
+	//Only called by the RequestRejectionHandler which is called when a request is rejected by the ServerApp
 	public void reject() {
 		
 		OutputStream clientOutputStream;

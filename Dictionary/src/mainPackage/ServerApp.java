@@ -8,11 +8,15 @@ import java.net.Socket;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class ServerApp {
 
@@ -21,9 +25,9 @@ public class ServerApp {
 		ServerSocket server = null;
 		Socket client;
 		int requestNumber = 1; //unique number for each request (to be incremented)
-		final int MAX_RUNNING_REQUESTS = 15;
-		final int MAX_WAITING_REQUESTS = 5;
-		final int MAX_RUNNING_THREADS_PER_REQUEST = 5;
+		final int MAX_RUNNING_REQUESTS = 10;
+		final int MAX_WAITING_REQUESTS = 10;
+		final int MAX_RUNNING_THREADS_PER_REQUEST = 6;
 		final String DIRECTORY_PATH = Paths.get("samples").toAbsolutePath().toString();
 		File directory = new File(DIRECTORY_PATH);
 		
@@ -39,6 +43,12 @@ public class ServerApp {
 		if(listOfFiles.size() == 0) {
 			System.out.println("No files found in the folder!");
 			System.exit(2);
+		}
+		
+		//Hash table that matches each file in the server with a pair of locks (read and write)
+		Map<File, ReadWriteLock> locksMap = new HashMap<>();
+		for (File file : listOfFiles) {
+			locksMap.put(file, new ReentrantReadWriteLock());
 		}
 	
 		try {
@@ -63,7 +73,8 @@ public class ServerApp {
 				
 				client = server.accept();
 				System.out.println("Request " + requestNumber + " has been received and delegated.");
-				requestsPool.execute(new SearchHandler(MAX_RUNNING_THREADS_PER_REQUEST, client, listOfFiles, requestNumber));
+				//pass the max number of file handler threads, the client socket, the files and their locks, and an identifier to a new searchHandler thread
+				requestsPool.execute(new SearchHandler(MAX_RUNNING_THREADS_PER_REQUEST, client, listOfFiles, locksMap, requestNumber));
 				//Either will execute or wait in the queue or get rejected
 				
 			} catch (IOException e) {
